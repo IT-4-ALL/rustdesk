@@ -1,50 +1,51 @@
 #!/bin/bash
 
-
+# Get Username
 username=$(whoami)
 admintoken=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c16)
 
+# Identify OS
 if [ -f /etc/os-release ]; then
-    
+    # freedesktop.org and systemd
     . /etc/os-release
     OS_NAME=$NAME
     OS_VERSION=$VERSION_ID
 
     UPSTREAM_ID=${ID_LIKE,,}
 
-  
+    # Fallback to ID_LIKE if ID was not 'ubuntu' or 'debian'
     if [ "${UPSTREAM_ID}" != "debian" ] && [ "${UPSTREAM_ID}" != "ubuntu" ]; then
         UPSTREAM_ID="$(echo ${ID_LIKE,,} | sed s/\"//g | cut -d' ' -f1)"
     fi
 
 elif type lsb_release >/dev/null 2>&1; then
-  
+    # linuxbase.org
     OS_NAME=$(lsb_release -si)
     OS_VERSION=$(lsb_release -sr)
 elif [ -f /etc/lsb-release ]; then
-   
+    # For some versions of Debian/Ubuntu without lsb_release command
     . /etc/lsb-release
     OS_NAME=$DISTRIB_ID
     OS_VERSION=$DISTRIB_RELEASE
 elif [ -f /etc/debian_version ]; then
-   
+    # Older Debian/Ubuntu/etc.
     OS_NAME=Debian
     OS_VERSION=$(cat /etc/debian_version)
 elif [ -f /etc/SuSe-release ]; then
-   
+    # Older SuSE/etc.
     OS_NAME=SuSE
     OS_VERSION=$(cat /etc/SuSe-release)
 elif [ -f /etc/redhat-release ]; then
-   
+    # Older Red Hat, CentOS, etc.
     OS_NAME=RedHat
     OS_VERSION=$(cat /etc/redhat-release)
 else
-    
+    # Fall back to uname, e.g. "Linux <version>", also works for BSD, etc.
     OS_NAME=$(uname -s)
     OS_VERSION=$(uname -r)
 fi
 
-
+# Output debugging info if $DEBUG is set
 if [ "$DEBUG" = "true" ]; then
     echo "OS: $OS_NAME"
     echo "Version: $OS_VERSION"
@@ -52,7 +53,8 @@ if [ "$DEBUG" = "true" ]; then
     exit 0
 fi
 
-
+# Setup prerequisites for server
+# Common named prerequisites
 COMMON_PREREQ="curl wget unzip tar"
 DEB_PREREQ="dnsutils"
 RPM_PREREQ="bind-utils"
@@ -62,18 +64,22 @@ if [ "${ID}" = "debian" ] || [ "$OS_NAME" = "Ubuntu" ] || [ "$OS_NAME" = "Debian
     sudo apt-get update
     sudo apt-get install -y ${COMMON_PREREQ} ${DEB_PREREQ}
 elif [ "$OS_NAME" = "CentOS" ] || [ "$OS_NAME" = "RedHat" ]   || [ "${UPSTREAM_ID}" = "rhel" ] ; then
-   
+    # OpenSUSE 15.4 fails to run the relay service and hangs waiting for it
+    # Needs more work before it can be enabled
+    # || [ "${UPSTREAM_ID}" = "suse" ]
     sudo yum update -y
     sudo yum install -y ${COMMON_PREREQ} ${RPM_PREREQ}
 else
     echo "Unsupported OS"
-    
+    # Here you could ask the user for permission to try and install anyway
+    # If they say yes, then do the install
+    # If they say no, exit the script
     exit 1
 fi
 
-
-PS3='Choose a option, IP or DNS/Domain:'
-OPTIONS=("IP (xxx.xxx.xxx.xxx)" "DNS/Domain(mydomainname.com)")
+# Choice for DNS or IP
+PS3='Choose your preferred option, IP or DNS/Domain:'
+OPTIONS=("IP" "DNS/Domain")
 select OPTION in "${OPTIONS[@]}"; do
 case $OPTION in
 "IP")
@@ -81,16 +87,16 @@ case $OPTION in
     break
     ;;
 "DNS/Domain")
-    echo -ne "Enter your domain/DNS address: "
+    echo -ne "Enter your preferred domain/DNS address: "
     read wanip
     # Check if wanip is a valid domain
     if ! [[ $wanip =~ ^[a-zA-Z0-9]+([a-zA-Z0-9.-]*[a-zA-Z0-9]+)?$ ]]; then
-        echo "Invalid address for example:(yourdomain.com or yourdomain.loc )"
+        echo "Invalid domain/DNS address"
         exit 1
     fi
     break
     ;;
-*) echo "Invalid $REPLY";;
+*) echo "Invalid option $REPLY";;
 esac
 done
 
@@ -179,12 +185,12 @@ echo -e "Your IP/DNS Address is ${wanip}"
 echo -e "Your public key is ${public_key}"
 echo -e "Install Rustdesk on your machines and change your public key and IP/DNS name to the above"
 
-echo "Press any key to finish the installation prozess!"
+echo "Press any key to finish the installation"
 while [ true ] ; do
     read -t 3 -n 1
     if [ $? = 0 ] ; then
         exit ;
     else
-        echo "Waiting for keypress to exit"
+        echo "Waiting for keypress"
     fi
 done
